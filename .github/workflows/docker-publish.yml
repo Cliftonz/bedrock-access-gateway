@@ -133,3 +133,33 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=lambda
           cache-to: type=gha,mode=max,scope=lambda
+
+  description:
+    name: Sync README to Docker Hub overview
+    needs: [ecs, lambda]
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Update ECS image overview
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ env.ECS_IMAGE }}
+          readme-filepath: ./README.md
+          short-description: "OpenAI-compatible REST proxy for Amazon Bedrock (FastAPI). ECS/Fargate image."
+          enable-url-completion: true
+
+      - name: Update Lambda image overview
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ env.LAMBDA_IMAGE }}
+          readme-filepath: ./README.md
+          short-description: "OpenAI-compatible REST proxy for Amazon Bedrock. AWS Lambda image (Web Adapter)."
+          enable-url-completion: true
