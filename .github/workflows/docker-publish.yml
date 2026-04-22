@@ -12,6 +12,13 @@ on:
         description: "Extra tag to push (in addition to the defaults)"
         required: false
         type: string
+  # Also rebuild after a successful upstream sync. The sync workflow's push
+  # uses GITHUB_TOKEN, which by design does not retrigger `push` events —
+  # so we chain via workflow_run instead.
+  workflow_run:
+    workflows: ["Sync from upstream"]
+    types: [completed]
+    branches: [main]
 
 env:
   # Image repositories on Docker Hub.
@@ -26,6 +33,9 @@ jobs:
   ecs:
     name: Build & push ECS/Fargate image (multi-arch)
     runs-on: ubuntu-latest
+    # On workflow_run triggers, only proceed if the sync finished successfully.
+    # For all other triggers (push, tags, manual dispatch) this evaluates true.
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     permissions:
       contents: read
     steps:
@@ -73,6 +83,9 @@ jobs:
   lambda:
     name: Build & push Lambda image (arm64)
     runs-on: ubuntu-latest
+    # On workflow_run triggers, only proceed if the sync finished successfully.
+    # For all other triggers (push, tags, manual dispatch) this evaluates true.
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     permissions:
       contents: read
     steps:

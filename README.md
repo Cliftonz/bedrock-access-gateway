@@ -92,6 +92,8 @@ Base URL: `http://localhost:8000/api/v1`. Use any valid AWS credential source �
 
 **Enabling the workflow on a fork:** add two repository secrets — `DOCKERHUB_USERNAME` (your Docker Hub namespace) and `DOCKERHUB_TOKEN` (a Docker Hub personal access token with `Read, Write, Delete` scope). Trigger with a push, a `v*.*.*` tag, or manually via **Actions → Publish Docker image to Docker Hub → Run workflow**.
 
+**Staying in sync with upstream:** a companion [`Sync from upstream`](.github/workflows/sync-upstream.yml) workflow runs daily (06:00 UTC) and on manual dispatch. It merges `aws-samples/bedrock-access-gateway:main` into this fork's `main` (failing loudly on conflict so you can resolve by hand) and pushes the result. A successful sync then chains into the Docker Hub publish workflow via `workflow_run`, so new upstream commits become new image tags automatically.
+
 ### Deployment
 
 Please follow the steps below to deploy the Bedrock Proxy APIs into your AWS account. Only supports regions where Amazon Bedrock is available (such as `us-west-2`). The deployment will take approximately **10-15 minutes** 🕒.

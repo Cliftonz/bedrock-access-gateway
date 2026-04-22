@@ -1,0 +1,63 @@
+name: Sync from upstream
+
+on:
+  schedule:
+    # Daily at 06:00 UTC.
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+env:
+  UPSTREAM_REPO: https://github.com/aws-samples/bedrock-access-gateway.git
+  UPSTREAM_BRANCH: main
+  FORK_BRANCH: main
+
+jobs:
+  sync:
+    name: Merge upstream/${{ github.ref_name }} into fork
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.FORK_BRANCH }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Configure git identity
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Add upstream remote and fetch
+        run: |
+          git remote add upstream "$UPSTREAM_REPO"
+          git fetch upstream "$UPSTREAM_BRANCH"
+
+      - name: Merge upstream into fork
+        id: merge
+        run: |
+          set -euo pipefail
+          BEFORE=$(git rev-parse HEAD)
+          if ! git merge --no-edit "upstream/${UPSTREAM_BRANCH}"; then
+            echo "::error::Merge conflict between upstream/${UPSTREAM_BRANCH} and fork ${FORK_BRANCH}. Resolve manually."
+            git merge --abort || true
+            exit 1
+          fi
+          AFTER=$(git rev-parse HEAD)
+          if [ "$BEFORE" = "$AFTER" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No new commits from upstream."
+          else
+            echo "changed=true"  >> "$GITHUB_OUTPUT"
+            echo "Merged $(git rev-list --count "${BEFORE}..${AFTER}") commit(s) from upstream."
+          fi
+
+      - name: Push to fork
+        if: steps.merge.outputs.changed == 'true'
+        run: git push origin "HEAD:${FORK_BRANCH}"
