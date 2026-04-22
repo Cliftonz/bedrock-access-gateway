@@ -63,8 +63,34 @@ The following diagram illustrates the reference architecture. It uses [Amazon AP
 |--------|------|------|----------|
 | **API Gateway + Lambda** | No VPC required, pay-per-request, native streaming support, lower operational overhead | Potential cold starts | Most use cases, cost-sensitive deployments |
 | **ALB + Fargate** | Lowest streaming latency, no cold starts | Higher cost, requires VPC | High-throughput, latency-sensitive workloads |
+| **Pre-built Docker Hub image** | No build step, works with any container runtime (ECS, EKS, Kubernetes, Docker, Podman) | You manage the infra | Self-hosted / non-AWS runtimes, quick trials |
 
 You can also use Lambda Function URL as an alternative, see [example](https://github.com/awslabs/aws-lambda-web-adapter/tree/main/examples/fastapi-response-streaming)
+
+### Pre-built Docker Hub images
+
+Container images are built by the [`Publish Docker image to Docker Hub`](.github/workflows/docker-publish.yml) GitHub Actions workflow on every push to `main` and every `v*.*.*` tag. Two images are published:
+
+| Image | Dockerfile | Platforms | Use for |
+|-------|-----------|-----------|---------|
+| `<your-dockerhub-username>/bedrock-access-gateway` | `src/Dockerfile_ecs` | `linux/amd64`, `linux/arm64` | ECS/Fargate, Kubernetes, `docker run`, `docker-compose` |
+| `<your-dockerhub-username>/bedrock-access-gateway-lambda` | `src/Dockerfile` | `linux/arm64` | AWS Lambda (ships the Lambda Web Adapter) |
+
+Tags: `latest` (HEAD of `main`), semver (`1.2.3`, `1.2`, `1`) on release tags, and short commit SHA.
+
+**Run locally with the pre-built ECS image:**
+
+```bash
+docker run --rm -p 8000:8080 \
+  -e API_KEY=my-local-key \
+  -e AWS_REGION=us-west-2 \
+  -v ~/.aws:/home/appuser/.aws:ro \
+  <your-dockerhub-username>/bedrock-access-gateway:latest
+```
+
+Base URL: `http://localhost:8000/api/v1`. Use any valid AWS credential source — an `AWS_PROFILE`, explicit `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` env vars, or a mounted `~/.aws` dir as shown above.
+
+**Enabling the workflow on a fork:** add two repository secrets — `DOCKERHUB_USERNAME` (your Docker Hub namespace) and `DOCKERHUB_TOKEN` (a Docker Hub personal access token with `Read, Write, Delete` scope). Trigger with a push, a `v*.*.*` tag, or manually via **Actions → Publish Docker image to Docker Hub → Run workflow**.
 
 ### Deployment
 
@@ -364,13 +390,19 @@ You can use the [Models API](./docs/Usage.md#models-api) to get/refresh a list o
 
 ### Can I run this locally
 
-Yes, you can run this locally, e.g. run below command under `src` folder:
+Yes. Three options:
 
-```bash
-uvicorn api.app:app --host 0.0.0.0 --port 8000
-```
+1. **From the pre-built Docker Hub image** — see [Pre-built Docker Hub images](#pre-built-docker-hub-images) above.
+2. **From source with Docker Compose:**
+   ```bash
+   OPENAI_API_KEY=my-local-key docker-compose up --build
+   ```
+3. **From source with uvicorn directly**, under the `src` folder:
+   ```bash
+   API_KEY=my-local-key AWS_REGION=us-west-2 uvicorn api.app:app --host 0.0.0.0 --port 8000
+   ```
 
-The API base url should look like `http://localhost:8000/api/v1`.
+The API base url should look like `http://localhost:8000/api/v1` in all cases.
 
 ### Any performance sacrifice or latency increase by using the proxy APIs
 
